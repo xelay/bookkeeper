@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#01696f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Bookkeeper" />
+  <meta name="description" content="Личный учет финансов по принципу двойной записи. Offline-first PWA." />
+  <title>Bookkeeper — Double Entry</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+  <script defer src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+
+  <header class="app-header">
+    <div>
+      <div class="brand-row">
+        <svg class="logo" viewBox="0 0 64 64" aria-label="Bookkeeper logo" role="img" fill="none">
+          <rect x="8" y="10" width="48" height="44" rx="10" stroke="currentColor" stroke-width="4"/>
+          <path d="M20 24H44M20 33H44M20 42H34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+          <line x1="48" y1="18" x2="48" y2="46" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <p class="eyebrow">PWA · Offline-first</p>
+          <h1>Bookkeeper</h1>
+        </div>
+      </div>
+      <p class="subtitle">Личный учет финансов по принципу двойной записи.</p>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" type="button" data-theme-toggle aria-label="Переключить тему" title="Тема">◐</button>
+      <button class="primary-btn" type="button" id="installBtn" hidden>Установить</button>
+    </div>
+  </header>
+
+  <main id="main" class="layout">
+    <nav class="tabs" aria-label="Основная навигация">
+      <button class="tab-btn active" data-view="journal" type="button">Журнал</button>
+      <button class="tab-btn" data-view="report" type="button">Баланс</button>
+      <button class="tab-btn" data-view="importExport" type="button">Экспорт</button>
+      <button class="tab-btn" data-view="settings" type="button">Настройки</button>
+    </nav>
+
+    <section class="panel panel-highlight stats-grid" aria-label="Сводка">
+      <article class="stat-card">
+        <p class="stat-label">Проводок</p>
+        <p class="stat-value" id="txCount">0</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Счетов</p>
+        <p class="stat-value" id="accountCount">0</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Период</p>
+        <p class="stat-value stat-small" id="periodLabel">—</p>
+      </article>
+    </section>
+
+    <!-- JOURNAL -->
+    <section class="view active" id="view-journal">
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Журнал</p>
+            <h2>Проводки</h2>
+          </div>
+          <button class="primary-btn" type="button" id="newTransactionBtn">+ Новая</button>
+        </div>
+        <div class="toolbar">
+          <label>
+            <span>Год</span>
+            <select id="filterYear"></select>
+          </label>
+          <label>
+            <span>Месяц</span>
+            <select id="filterMonth"></select>
+          </label>
+          <label class="wide">
+            <span>Поиск</span>
+            <input id="searchInput" type="search" placeholder="Счет, описание…" />
+          </label>
+        </div>
+        <div id="journalList" class="stack-list" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- BALANCE / REPORT -->
+    <section class="view" id="view-report">
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Отчет</p>
+            <h2>Баланс по счетам</h2>
+          </div>
+        </div>
+        <div class="toolbar">
+          <label>
+            <span>Период</span>
+            <select id="reportPeriodType">
+              <option value="all">Весь период</option>
+              <option value="year">Год</option>
+              <option value="month">Месяц</option>
+            </select>
+          </label>
+          <label>
+            <span>Год</span>
+            <select id="reportYear"></select>
+          </label>
+          <label>
+            <span>Месяц</span>
+            <select id="reportMonth"></select>
+          </label>
+        </div>
+        <div id="balanceList" class="stack-list"></div>
+      </div>
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Карточка счета</p>
+            <h2 id="ledgerTitle">Выберите счет</h2>
+          </div>
+        </div>
+        <div id="accountLedger" class="stack-list"></div>
+      </div>
+    </section>
+
+    <!-- IMPORT / EXPORT -->
+    <section class="view" id="view-importExport">
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">SheetJS / XLSX</p>
+            <h2>Импорт и экспорт</h2>
+          </div>
+        </div>
+        <div class="action-grid">
+          <button class="primary-btn" type="button" id="exportBtn">⬇ Выгрузить в XLSX</button>
+          <label class="secondary-btn file-btn" style="cursor:pointer;">
+            ⬆ Загрузить из XLSX
+            <input type="file" id="importFile" accept=".xlsx,.xls" hidden />
+          </label>
+          <button class="ghost-btn danger" type="button" id="clearDataBtn">Очистить все данные</button>
+        </div>
+        <div class="note-block">
+          <p>Формат импорта — лист <strong>Transactions</strong>. Колонки:<br/>
+          <code>date, debitAccount, creditAccount, amountRub, currency, foreignAmount, rate, description, accountTypeDebit, accountTypeCredit</code></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <div class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Настройки</p>
+            <h2>Базовые параметры</h2>
+          </div>
+        </div>
+        <form id="settingsForm" class="form-grid" onsubmit="return false;">
+          <label>
+            <span>Базовая валюта</span>
+            <input type="text" id="baseCurrencyInput" value="RUB" maxlength="10" />
+          </label>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- TRANSACTION DIALOG -->
+  <dialog id="transactionDialog" class="sheet-dialog">
+    <form class="sheet-card" id="transactionForm" method="dialog">
+      <div class="sheet-head">
+        <div>
+          <p class="eyebrow">Проводка</p>
+          <h2 id="dialogTitle">Новая проводка</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeDialogBtn" aria-label="Закрыть">✕</button>
+      </div>
+
+      <input type="hidden" id="txId" />
+
+      <div class="form-grid">
+        <label>
+          <span>Дата</span>
+          <input type="date" id="dateInput" required />
+        </label>
+        <label></label>
+
+        <label>
+          <span>Счет ДТ (куда пришло)</span>
+          <input list="accountsDebitList" id="debitAccountInput" placeholder="Наличные RUB, ИИС…" required autocomplete="off" />
+          <datalist id="accountsDebitList"></datalist>
+        </label>
+        <label>
+          <span>Тип счета ДТ</span>
+          <select id="debitTypeInput">
+            <option value="active">Активный</option>
+            <option value="passive">Пассивный</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Счет КТ (откуда ушло)</span>
+          <input list="accountsCreditList" id="creditAccountInput" placeholder="Доход: Зарплата, Вклад…" required autocomplete="off" />
+          <datalist id="accountsCreditList"></datalist>
+        </label>
+        <label>
+          <span>Тип счета КТ</span>
+          <select id="creditTypeInput">
+            <option value="passive">Пассивный</option>
+            <option value="active">Активный</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Сумма (RUB)</span>
+          <input type="number" id="amountRubInput" min="0" step="0.01" inputmode="decimal" required />
+        </label>
+        <label>
+          <span>Валюта (если не RUB)</span>
+          <input type="text" id="currencyInput" placeholder="USD, CNY, EUR…" maxlength="10" />
+        </label>
+
+        <label>
+          <span>Сумма в валюте</span>
+          <input type="number" id="foreignAmountInput" min="0" step="0.0001" inputmode="decimal" />
+        </label>
+        <label>
+          <span>Курс (RUB за 1 ед.)</span>
+          <input type="number" id="rateInput" min="0" step="0.0001" inputmode="decimal" />
+        </label>
+
+        <label class="wide">
+          <span>Описание</span>
+          <textarea id="descriptionInput" placeholder="Комментарий к операции…"></textarea>
+        </label>
+      </div>
+
+      <div class="sheet-actions">
+        <button class="ghost-btn danger" type="button" id="deleteTxBtn" hidden>Удалить</button>
+        <div style="display:flex;gap:var(--space-3);margin-left:auto;">
+          <button class="ghost-btn" type="button" id="cancelDialogBtn">Отмена</button>
+          <button class="primary-btn" type="submit">Сохранить</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
